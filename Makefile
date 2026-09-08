@@ -14,7 +14,7 @@ alloc:
 	$(CC) $(CFLAGS) startup.s src/main_alloc.c src/allocator.c -T linker.ld -o rtos_alloc.elf
 
 stm32:
-	$(CC) -mcpu=cortex-m4 -mthumb -nostdlib -nostartfiles -Isrc startup_stm32.s src/switch.s src/systick.c src/mutex.c src/uart_stm32.c src/main_stm32.c -T linker_stm32.ld -o rtos_stm32.elf
+	$(CC) -mcpu=cortex-m4 -mthumb -nostdlib -nostartfiles -Isrc startup_stm32.s src/uart_stm32.c src/main_stm32.c -T linker_stm32.ld -o rtos_stm32.elf
 
 flash:
 	openocd -f interface/stlink.cfg -f target/stm32f4x.cfg -c "program rtos_stm32.elf verify reset exit"

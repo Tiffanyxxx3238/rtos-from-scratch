@@ -1,5 +1,5 @@
 .syntax unified
-.cpu cortex-m3
+.cpu cortex-m4
 .thumb
 
 .global context_switch

@@ -21,7 +21,7 @@ void uart_init(void) {
     GPIOA_AFRL &= ~(0xF << 8);
     GPIOA_AFRL |=  (7   << 8);
 
-    USART2_BRR = 0x008B;
+    USART2_BRR = 0x088E;
     USART2_CR1 = (1 << 3) | (1 << 13);
 }
 
