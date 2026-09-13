@@ -205,4 +205,4 @@ passthrough issues):
 - [x] Diagnosed and fixed a stack-frame corruption bug via GDB on real hardware
 - [x] Semaphore (counting, atomic compare-and-swap)
 - [x] Priority-based scheduling (demonstrates task starvation)
-- [ ] Simple bootloader over UART
+- [x] Minimal two-stage bootloader (UART command, jumps to app via vector table)
