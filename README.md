@@ -86,7 +86,34 @@ A first-fit allocator with block splitting and coalescing:
   there is excess space
 - mem_free marks a block free and merges it with adjacent free blocks
 
-### 9. Physical hardware port (STM32F411RE)
+### 9. Minimal UART bootloader
+A two-stage boot setup: the bootloader occupies the first 32K of
+flash and the application occupies the rest. On boot, the bootloader
+prints a prompt over UART and waits for a command. Sending 'g' tells
+it to jump to the application already sitting at 0x8000.
+
+The jump itself reads the application's own vector table (its stack
+pointer and reset handler, exactly like the very first vector table
+this project wrote by hand for its own startup code), sets the Main
+Stack Pointer to the application's stack, and branches to the
+application's reset handler:
+
+    void jump_to_app(unsigned int app_addr) {
+        unsigned int *vector_table = (unsigned int *)app_addr;
+        unsigned int app_stack = vector_table[0];
+        unsigned int app_reset = vector_table[1];
+        __asm volatile (
+            "msr msp, %0\n"
+            "bx %1\n"
+            : : "r"(app_stack), "r"(app_reset)
+        );
+    }
+
+This is the same fundamental mechanism used by real bootloaders and
+firmware update systems: the bootloader never needs to know anything
+about what the application does, only where its vector table lives.
+
+### 10. Physical hardware port (STM32F411RE)
 The QEMU version was ported to a real Nucleo-F411RE board: a new
 linker script and startup file for the STM32 memory map, USART2
 configured for the board's actual UART-to-USB bridge, and the same
