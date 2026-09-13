@@ -17,8 +17,11 @@ No HAL, no CMSIS, no vendor SDK. Verified on QEMU and on physical STM32F411RE ha
 
 - Hand-written ARM Cortex-M vector table and startup code
 - A from-scratch context switch in ARM Thumb assembly
-- Cooperative and preemptive schedulers (SysTick + PendSV)
-- A spinlock mutex and a first-fit memory allocator with coalescing
+- Cooperative, preemptive, and priority-based schedulers (SysTick + PendSV)
+- A spinlock mutex, a counting semaphore, and a first-fit memory
+  allocator with coalescing
+- A minimal two-stage UART bootloader that jumps into a separately
+  compiled application
 - A full port from QEMU to physical STM32F411RE hardware, including
   finding and fixing a genuinely subtle stack-corruption bug using GDB
   register-level tracing on real silicon
@@ -86,7 +89,62 @@ A first-fit allocator with block splitting and coalescing:
   there is excess space
 - mem_free marks a block free and merges it with adjacent free blocks
 
-### 9. Minimal UART bootloader
+### 9. Semaphore
+Built on the same atomic primitives as the mutex, but as a counting
+semaphore rather than a binary lock:
+
+    void sem_wait(Semaphore *s) {
+        while (1) {
+            int old = s->count;
+            if (old > 0) {
+                if (__sync_bool_compare_and_swap(&s->count, old, old - 1)) {
+                    return;
+                }
+            }
+        }
+    }
+
+    void sem_signal(Semaphore *s) {
+        __sync_fetch_and_add(&s->count, 1);
+    }
+
+sem_wait spins on a compare-and-swap instead of a simple test-and-set:
+it only succeeds if the count hasn't been decremented by another task
+between the read and the write, so two tasks racing on sem_wait at the
+same time cannot both take the last permit. Initialized to 1, it
+behaves as a mutex; initialized to N, it allows up to N tasks to hold
+the resource concurrently. This project uses it exactly like the
+mutex — serializing UART access — to demonstrate that the counting
+version is a strict generalization of the binary lock.
+
+### 10. Priority-based scheduling
+A separate scheduler (src/main_priority.c) replaces the fixed A/B
+alternation with a priority table. Three tasks are each assigned a
+static priority (0 = highest), and every time PendSV fires, the
+scheduler scans all ready tasks and switches to whichever one has the
+numerically lowest priority value:
+
+    unsigned int pick_next_task(void) {
+        int best = -1;
+        unsigned int best_prio = 0xFFFFFFFF;
+        for (int i = 0; i < NUM_TASKS; i++) {
+            if (task_ready[i] && task_priority[i] < best_prio) {
+                best_prio = task_priority[i];
+                best = i;
+            }
+        }
+        return (best >= 0) ? (unsigned int)best : current_task;
+    }
+
+Because all three tasks are always ready, this scheduler exhibits
+starvation by design: the HIGH-priority task runs exclusively and
+MED/LOW never execute at all, verified directly in the QEMU output.
+This is the expected behavior of pure fixed-priority scheduling
+without time-slicing, and the reason real RTOS schedulers either add
+round-robin among equal priorities or use techniques like priority
+aging to guarantee lower-priority tasks eventually run.
+
+### 11. Minimal UART bootloader
 A two-stage boot setup: the bootloader occupies the first 32K of
 flash and the application occupies the rest. On boot, the bootloader
 prints a prompt over UART and waits for a command. Sending 'g' tells
@@ -113,7 +171,7 @@ This is the same fundamental mechanism used by real bootloaders and
 firmware update systems: the bootloader never needs to know anything
 about what the application does, only where its vector table lives.
 
-### 10. Physical hardware port (STM32F411RE)
+### 12. Physical hardware port (STM32F411RE)
 The QEMU version was ported to a real Nucleo-F411RE board: a new
 linker script and startup file for the STM32 memory map, USART2
 configured for the board's actual UART-to-USB bridge, and the same
@@ -175,11 +233,17 @@ layout, not just against "it ran once and printed something."
         main.c              Cooperative scheduler (QEMU)
         main_preemptive.c   Preemptive scheduler (QEMU)
         main_mutex.c        Mutex demo (QEMU)
+        main_semaphore.c    Semaphore demo (QEMU)
+        main_priority.c     Priority-based scheduler, 3 tasks (QEMU)
         main_alloc.c        Memory allocator demo (QEMU)
         main_stm32.c        Full preemptive RTOS on physical hardware
-        switch.s            Context switch in ARM assembly
+        bootloader.c        UART bootloader
+        app_main.c          Sample app loaded by the bootloader
+        switch.s            Context switch in ARM assembly (2-task)
+        switch_generic.s    Context switch in ARM assembly (N-task)
         systick.c           SysTick driver
         mutex.c / mutex.h   Spinlock mutex
+        semaphore.c / semaphore.h  Counting semaphore
         allocator.c / allocator.h  Memory allocator
 
 ## Build and run
