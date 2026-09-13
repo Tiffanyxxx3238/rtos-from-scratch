@@ -203,6 +203,6 @@ passthrough issues):
 - [x] First-fit memory allocator with coalescing
 - [x] Port to STM32F411RE physical hardware
 - [x] Diagnosed and fixed a stack-frame corruption bug via GDB on real hardware
-- [ ] Semaphore
-- [ ] Priority-based scheduling
+- [x] Semaphore (counting, atomic compare-and-swap)
+- [x] Priority-based scheduling (demonstrates task starvation)
 - [ ] Simple bootloader over UART
